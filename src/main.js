@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { createWorker } from 'tesseract.js';
 import './style.css';
+import './debug.css';
 
 const DB_NAME = 'inventario-local';
 const DB_VERSION = 1;
@@ -12,6 +13,7 @@ const ui = {
   camera: $('camera'), placeholder: $('cameraPlaceholder'), cameraToggle: $('cameraToggle'), capture: $('capture'),
   canvas: $('captureCanvas'), ocrStatus: $('ocrStatus'), matchPanel: $('matchPanel'), matchCode: $('matchCode'),
   matchDescription: $('matchDescription'), matchWarehouse: $('matchWarehouse'), register: $('registerScan'),
+  debugPanel: $('debugPanel'), debugSummary: $('debugSummary'), debugOutput: $('debugOutput'), copyDebug: $('copyDebug'),
   pendingList: $('pendingList'), togglePending: $('togglePending'), exportCsv: $('exportCsv'), reset: $('resetSession'),
   saveState: $('saveState'), toast: $('toast')
 };
@@ -183,10 +185,15 @@ ui.capture.addEventListener('click', async () => {
     ui.canvas.height = Math.round(ui.camera.videoHeight * ratio);
     ui.canvas.getContext('2d', { willReadFrequently: true }).drawImage(ui.camera, 0, 0, ui.canvas.width, ui.canvas.height);
     const worker = await getWorker();
-    const { data } = await worker.recognize(ui.canvas);
-    const match = findInventoryCode(data.lines || []);
+    // Tesseract only returns plain text by default. Ask for block output so
+    // the app also receives OCR lines and their positions.
+    const { data } = await worker.recognize(ui.canvas, {}, { blocks: true });
+    const analysis = analyzeInventoryCode(data);
+    renderOcrDebug(analysis);
+    const match = analysis.code;
     if (!match) {
-      ui.ocrStatus.textContent = 'No encontré un código del Excel sobre Lote/Serial o Concepto. Acerca la etiqueta, evita reflejos y toma otra foto.';
+      ui.debugPanel.open = true;
+      ui.ocrStatus.textContent = 'No encontré un código del Excel. Revisa el diagnóstico de abajo para ver qué leyó el teléfono.';
       return;
     }
     const matches = items.filter((x) => x.code === match && (selectedWarehouse() === '*' || x.warehouse === selectedWarehouse()));
@@ -203,32 +210,101 @@ ui.capture.addEventListener('click', async () => {
     ui.matchPanel.classList.remove('hidden');
     ui.ocrStatus.textContent = 'Confirma el producto antes de descontar una unidad.';
   } catch (err) {
+    ui.debugPanel.open = true;
+    ui.debugSummary.textContent = 'El OCR no pudo completar la lectura.';
+    ui.debugOutput.textContent = `Error: ${err.stack || err.message || String(err)}`;
     ui.ocrStatus.textContent = `No pude procesar la foto: ${err.message}`;
   } finally { ui.capture.disabled = false; }
 });
 
-function findInventoryCode(lines) {
+function getOcrLines(data) {
+  const lines = [];
+  for (const block of data.blocks || []) for (const paragraph of block.paragraphs || []) {
+    for (const line of paragraph.lines || []) lines.push({ text: String(line.text || '').trim(), bbox: line.bbox || null });
+  }
+  if (!lines.length && Array.isArray(data.lines)) {
+    for (const line of data.lines) lines.push({ text: String(line.text || '').trim(), bbox: line.bbox || null });
+  }
+  if (!lines.length) for (const text of String(data.text || '').split(/\r?\n/)) {
+    if (text.trim()) lines.push({ text: text.trim(), bbox: null });
+  }
+  return lines;
+}
+
+function numericTokens(text) {
+  const found = [];
+  // OCR can insert spaces into a code or confuse 0/O and 1/I/l.
+  const tokens = String(text || '').match(/[0-9OoIl](?:[0-9OoIl\s.,-]*[0-9OoIl])?/g) || [];
+  for (const raw of tokens) {
+    const digits = raw.replace(/[Oo]/g, '0').replace(/[Il]/g, '1').replace(/\D/g, '');
+    if (digits.length >= 5 && digits.length <= 12) found.push({ raw: raw.trim(), digits });
+  }
+  return found;
+}
+
+function analyzeInventoryCode(data) {
+  const lines = getOcrLines(data);
   const anchor = lines.find((line) => {
     const n = normalize(line.text);
-    return n.includes('loteserial') || n.includes('concepto');
-  });
-  if (!anchor?.bbox) return null;
-  const ay = (anchor.bbox.y0 + anchor.bbox.y1) / 2;
-  const ax = (anchor.bbox.x0 + anchor.bbox.x1) / 2;
-  const above = lines.filter((line) => line.bbox && (line.bbox.y0 + line.bbox.y1) / 2 < ay)
-    .sort((a,b) => ((b.bbox.y0+b.bbox.y1)/2) - ((a.bbox.y0+a.bbox.y1)/2));
-  for (const line of above) {
-    const cy = (line.bbox.y0 + line.bbox.y1) / 2;
-    const cx = (line.bbox.x0 + line.bbox.x1) / 2;
-    if (ay - cy > 260) break;
-    if (Math.abs(cx - ax) > 420) continue;
-    const candidates = (line.text.replace(/[Oo]/g, '0').match(/\d{5,12}/g) || []);
-    for (const code of candidates) {
-      if (items.some((x) => x.code === code && (selectedWarehouse() === '*' || x.warehouse === selectedWarehouse()))) return code;
-    }
+    return n.includes('concept') || n.includes('loteserial') || /lote.*seri|lotes.*seri|rote.*seri/.test(n);
+  }) || null;
+  const warehouse = selectedWarehouse();
+  const inWarehouse = (item) => warehouse === '*' || item.warehouse === warehouse;
+  const candidates = lines.flatMap((line, index) => numericTokens(line.text).map((token) => ({ ...token, line: line.text, index, bbox: line.bbox })));
+  const exact = candidates.filter((candidate) => items.some((item) => item.code === candidate.digits));
+  let ordered = exact;
+  if (anchor?.bbox) {
+    const anchorIndex = lines.indexOf(anchor);
+    const above = exact.filter((candidate) => {
+      if (!candidate.bbox) return candidate.index < anchorIndex;
+      const dy = (anchor.bbox.y0 + anchor.bbox.y1 - candidate.bbox.y0 - candidate.bbox.y1) / 2;
+      const dx = Math.abs((anchor.bbox.x0 + anchor.bbox.x1 - candidate.bbox.x0 - candidate.bbox.x1) / 2);
+      return dy > 0 && dy <= 420 && dx <= 620;
+    }).sort((a, b) => b.index - a.index);
+    if (above.length) ordered = [...above, ...exact.filter((candidate) => !above.includes(candidate))];
   }
-  return null;
+  const selectedMatch = ordered.find((candidate) => items.some((item) => item.code === candidate.digits && inWarehouse(item)));
+  const anyMatch = ordered[0];
+  return {
+    code: selectedMatch?.digits || anyMatch?.digits || null,
+    anchor: anchor?.text || null,
+    lines,
+    candidates,
+    warehouse,
+    warehouseMismatch: Boolean(anyMatch && !selectedMatch),
+    text: String(data.text || '')
+  };
 }
+
+function renderOcrDebug(result) {
+  const anchorText = result.anchor ? `Detectada: “${result.anchor}”` : 'No detectada; también busqué códigos coincidentes en todo el OCR.';
+  const numberLines = result.candidates.length
+    ? result.candidates.map((x) => `${x.raw} → ${x.digits}${items.some((item) => item.code === x.digits) ? ' [está en Excel]' : ' [sin coincidencia]'}`).join('\n')
+    : 'Ningún número de 5 a 12 dígitos.';
+  const matchText = result.code
+    ? `${result.code}${result.warehouseMismatch ? ' (existe, pero no en la bodega seleccionada)' : ''}`
+    : 'Ninguno';
+  ui.debugSummary.textContent = `Código elegido: ${matchText} · Ancla: ${anchorText}`;
+  const lineDump = result.lines.map((line, i) => {
+    const box = line.bbox ? ` [x:${line.bbox.x0}-${line.bbox.x1}, y:${line.bbox.y0}-${line.bbox.y1}]` : '';
+    return `${String(i + 1).padStart(2, '0')}${box} ${line.text}`;
+  }).join('\n') || '(sin líneas)';
+  ui.debugOutput.textContent = [
+    `Foto procesada: ${ui.canvas.width} × ${ui.canvas.height}`,
+    `Bodega: ${result.warehouse === '*' ? 'todas' : result.warehouse || '(sin bodega)'}`,
+    `Ancla Lote/Serial o Concepto: ${anchorText}`,
+    `Código elegido: ${matchText}`,
+    '', 'NÚMEROS DETECTADOS:', numberLines,
+    '', 'TEXTO OCR LITERAL:', result.text || '(Tesseract no devolvió texto)',
+    '', 'LÍNEAS OCR Y POSICIONES:', lineDump
+  ].join('\n');
+  ui.debugPanel.open = !result.code;
+}
+
+ui.copyDebug.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(ui.debugOutput.textContent); showToast('Diagnóstico copiado'); }
+  catch { showToast('Mantén presionado el texto para seleccionarlo.'); }
+});
 
 ui.register.addEventListener('click', async () => {
   if (!currentMatch) return;

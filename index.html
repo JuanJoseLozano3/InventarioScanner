@@ -45,6 +45,12 @@
             <button id="capture" class="button primary" disabled>Tomar foto y leer</button>
           </div>
           <div id="ocrStatus" class="ocr-status" role="status" aria-live="polite">La lectura usa el navegador de este teléfono.</div>
+          <details id="debugPanel" class="debug-panel">
+            <summary>Diagnóstico de lectura</summary>
+            <div id="debugSummary" class="debug-summary">Toma una foto para ver exactamente qué texto reconoce el lector.</div>
+            <pre id="debugOutput" class="debug-output">Aún no hay una lectura.</pre>
+            <button id="copyDebug" class="text-button debug-copy" type="button">Copiar diagnóstico</button>
+          </details>
           <canvas id="captureCanvas" class="hidden"></canvas>
         </section>
 

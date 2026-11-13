@@ -8,6 +8,7 @@ Versión web responsive para teléfonos Android. Se publica como sitio estático
 - El conteo se guarda en IndexedDB local, en el teléfono y navegador donde se abrió el sitio. Cerrar la pestaña y volver a entrar conserva la sesión.
 - La sesión puede perderse si se borran los datos del sitio, se usa incógnito o se cambia de navegador o teléfono. Al terminar, exporta el CSV como copia.
 - La foto se procesa en el teléfono. Tesseract descarga su modelo de idioma la primera vez que se usa OCR, así que esa primera lectura necesita conexión a Internet.
+- Si un código no coincide, abre `Diagnóstico de lectura` bajo la cámara para revisar el OCR literal, los números candidatos y sus coincidencias con el Excel.
 
 ## Publicar en Vercel
 

@@ -1,0 +1,5 @@
+.debug-panel{margin-top:12px;border:1px solid #dbe5de;border-radius:13px;background:#f7faf7;overflow:hidden}
+.debug-panel summary{padding:12px 14px;color:#315746;font-size:12px;font-weight:700;cursor:pointer}
+.debug-summary{padding:0 14px 10px;color:#547365;font-size:11px;line-height:1.45}
+.debug-output{max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 10px;padding:11px;border-radius:9px;background:#17231e;color:#d9e9df;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.debug-copy{margin:5px 8px 8px}
