@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { createWorker } from 'tesseract.js';
 import './style.css';
 import './debug.css';
+import './inventory-tabs.css';
 
 const DB_NAME = 'inventario-local';
 const DB_VERSION = 1;
@@ -14,7 +15,8 @@ const ui = {
   canvas: $('captureCanvas'), ocrStatus: $('ocrStatus'), matchPanel: $('matchPanel'), matchCode: $('matchCode'),
   matchDescription: $('matchDescription'), matchWarehouse: $('matchWarehouse'), register: $('registerScan'),
   debugPanel: $('debugPanel'), debugSummary: $('debugSummary'), debugOutput: $('debugOutput'), copyDebug: $('copyDebug'),
-  pendingList: $('pendingList'), togglePending: $('togglePending'), exportCsv: $('exportCsv'), reset: $('resetSession'),
+  inventoryList: $('inventoryList'), requiredTab: $('requiredTab'), missingTab: $('missingTab'),
+  requiredBadge: $('requiredBadge'), missingBadge: $('missingBadge'), exportCsv: $('exportCsv'), reset: $('resetSession'),
   saveState: $('saveState'), toast: $('toast')
 };
 let items = [];
@@ -23,6 +25,7 @@ let cameraStream = null;
 let workerPromise = null;
 let currentMatch = null;
 let toastTimer;
+let activeListTab = 'required';
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -126,6 +129,8 @@ function render() {
   ui.reset.disabled = !loaded;
   if (!loaded) {
     ui.saveState.textContent = 'Sin Excel'; ui.fileName.textContent = 'Todavía no hay un archivo cargado';
+    ui.requiredBadge.textContent = '0'; ui.missingBadge.textContent = '0';
+    ui.inventoryList.innerHTML = '<div class="complete-message">Carga un Excel para ver sus productos.</div>';
     return;
   }
   const current = ui.warehouse.value;
@@ -139,13 +144,26 @@ function render() {
   const pending = pendingItems();
   ui.scannedCount.textContent = formatQty(scanned);
   ui.pendingCount.textContent = pending.length;
-  ui.togglePending.textContent = ui.pendingList.classList.contains('hidden') ? 'Ver lista' : 'Ocultar';
-  ui.pendingList.innerHTML = pending.length
-    ? pending.map((x) => `<article class="pending-item"><div><strong>${escapeHtml(x.code)}</strong><span>${escapeHtml(x.description)}</span><small>${x.warehouse ? `Bodega ${escapeHtml(x.warehouse)} · ` : ''}Escaneadas ${formatQty(x.scanned)} de ${formatQty(x.expected)}</small></div><b>Faltan ${formatQty(Math.max(0, x.expected - x.scanned))}</b></article>`).join('')
-    : '<div class="complete-message">✓ No quedan cantidades pendientes en esta selección.</div>';
+  ui.requiredBadge.textContent = selected.length;
+  ui.missingBadge.textContent = pending.length;
+  ui.requiredTab.classList.toggle('active', activeListTab === 'required');
+  ui.requiredTab.setAttribute('aria-selected', String(activeListTab === 'required'));
+  ui.missingTab.classList.toggle('active', activeListTab === 'missing');
+  ui.missingTab.setAttribute('aria-selected', String(activeListTab === 'missing'));
+  const list = activeListTab === 'required' ? selected : pending;
+  ui.inventoryList.innerHTML = list.length
+    ? list.map((x) => {
+      const remaining = Math.max(0, x.expected - x.scanned);
+      const status = remaining > 0 ? `Faltan ${formatQty(remaining)}` : 'Completo';
+      return `<article class="inventory-row"><div class="inventory-row-main"><div class="inventory-ident"><strong>${escapeHtml(x.code)}</strong><span>${escapeHtml(x.description)}</span><small>${x.warehouse ? `Bodega ${escapeHtml(x.warehouse)}` : 'Sin bodega'}</small></div><b class="item-status ${remaining > 0 ? 'is-missing' : 'is-complete'}">${status}</b></div><div class="item-measures"><span>Esperadas <b>${formatQty(x.expected)}</b></span><span>Escaneadas <b>${formatQty(x.scanned)}</b></span><span>Faltan <b>${formatQty(remaining)}</b></span></div></article>`;
+    }).join('')
+    : activeListTab === 'missing'
+      ? '<div class="complete-message">✓ No quedan items faltantes en esta selección.</div>'
+      : '<div class="complete-message">No hay productos en esta bodega.</div>';
 }
 ui.warehouse.addEventListener('change', () => { ui.matchPanel.classList.add('hidden'); currentMatch = null; render(); });
-ui.togglePending.addEventListener('click', () => { ui.pendingList.classList.toggle('hidden'); render(); });
+ui.requiredTab.addEventListener('click', () => { activeListTab = 'required'; render(); });
+ui.missingTab.addEventListener('click', () => { activeListTab = 'missing'; render(); });
 
 async function toggleCamera() {
   if (cameraStream) { stopCamera(); return; }
@@ -326,7 +344,7 @@ ui.exportCsv.addEventListener('click', () => {
 ui.reset.addEventListener('click', async () => {
   if (!confirm('¿Borrar el Excel cargado y todos los escaneos guardados en este teléfono?')) return;
   stopCamera(); items = []; fileLabel = ''; currentMatch = null; await clearSession();
-  ui.matchPanel.classList.add('hidden'); ui.pendingList.classList.add('hidden'); render(); showToast('Sesión borrada');
+  ui.matchPanel.classList.add('hidden'); activeListTab = 'required'; render(); showToast('Sesión borrada');
 });
 
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }

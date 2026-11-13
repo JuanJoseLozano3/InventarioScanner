@@ -61,8 +61,12 @@
         </section>
 
         <section class="card pending-card">
-          <div class="section-heading"><div><p class="eyebrow">CIERRE</p><h2>Lo que falta</h2></div><button id="togglePending" class="text-button">Ver lista</button></div>
-          <div id="pendingList" class="pending-list hidden"></div>
+          <div class="section-heading"><div><p class="eyebrow">REVISIÓN DEL CONTEO</p><h2>Productos del inventario</h2></div></div>
+          <div class="inventory-tabs" role="tablist" aria-label="Lista de productos">
+            <button id="requiredTab" class="inventory-tab active" type="button" role="tab" aria-selected="true">Items requeridos <span id="requiredBadge" class="tab-badge">0</span></button>
+            <button id="missingTab" class="inventory-tab" type="button" role="tab" aria-selected="false">Items faltantes <span id="missingBadge" class="tab-badge">0</span></button>
+          </div>
+          <div id="inventoryList" class="inventory-list"><div class="complete-message">Carga un Excel para ver sus productos.</div></div>
           <div class="export-row"><button id="exportCsv" class="button secondary" disabled>Guardar resultado CSV</button><button id="resetSession" class="text-button danger" disabled>Empezar de nuevo</button></div>
         </section>
 
