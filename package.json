@@ -1,0 +1,9 @@
+{
+  "name": "inventario-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build", "preview": "vite preview" },
+  "dependencies": { "tesseract.js": "^7.0.0", "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz" },
+  "devDependencies": { "vite": "^6.4.4" }
+}

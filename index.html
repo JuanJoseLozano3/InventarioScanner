@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#145a46" />
+    <meta name="description" content="Conteo de inventario con cámara y archivo Excel." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Inventario · Conteo rápido</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand-mark" aria-hidden="true">I</div>
+        <div><div class="eyebrow">CONTEO EN TIENDA</div><h1>Inventario</h1></div>
+        <span id="saveState" class="save-state">Sin Excel</span>
+      </header>
+
+      <main>
+        <section class="intro card">
+          <p class="eyebrow">PASO 1</p>
+          <h2>Abre el inventario</h2>
+          <p>Carga el Excel. El archivo y los avances quedan guardados en este teléfono.</p>
+          <label class="button primary full" for="excelFile">Elegir archivo Excel</label>
+          <input id="excelFile" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+          <div id="fileName" class="file-name">Todavía no hay un archivo cargado</div>
+        </section>
+
+        <section id="inventoryPanel" class="card hidden">
+          <div class="section-heading"><div><p class="eyebrow">PASO 2</p><h2>Elige la bodega</h2></div><span id="itemCount" class="pill">0 productos</span></div>
+          <select id="warehouse" aria-label="Bodega"></select>
+          <div class="summary-strip"><div><strong id="scannedCount">0</strong><span>escaneados</span></div><div><strong id="pendingCount">0</strong><span>pendientes</span></div></div>
+        </section>
+
+        <section id="cameraPanel" class="card hidden">
+          <div class="section-heading"><div><p class="eyebrow">PASO 3</p><h2>Lee la etiqueta</h2></div></div>
+          <p class="hint">Encuadra el número que está justo encima de <b>Lote/Serial</b> o <b>Concepto</b>.</p>
+          <div id="cameraBox" class="camera-box">
+            <video id="camera" playsinline autoplay muted></video>
+            <div id="cameraPlaceholder" class="camera-placeholder"><span class="camera-icon">⌖</span><span>La cámara aparecerá aquí</span></div>
+            <div class="aim-guide"><span></span></div>
+          </div>
+          <div class="camera-actions">
+            <button id="cameraToggle" class="button secondary">Abrir cámara</button>
+            <button id="capture" class="button primary" disabled>Tomar foto y leer</button>
+          </div>
+          <div id="ocrStatus" class="ocr-status" role="status" aria-live="polite">La lectura usa el navegador de este teléfono.</div>
+          <canvas id="captureCanvas" class="hidden"></canvas>
+        </section>
+
+        <section id="matchPanel" class="match-card hidden" aria-live="polite">
+          <div class="match-check">✓</div>
+          <div class="match-content"><div class="eyebrow">CÓDIGO RECONOCIDO</div><strong id="matchCode"></strong><span id="matchDescription"></span><small id="matchWarehouse"></small></div>
+          <button id="registerScan" class="button primary">Registrar 1 unidad</button>
+        </section>
+
+        <section class="card pending-card">
+          <div class="section-heading"><div><p class="eyebrow">CIERRE</p><h2>Lo que falta</h2></div><button id="togglePending" class="text-button">Ver lista</button></div>
+          <div id="pendingList" class="pending-list hidden"></div>
+          <div class="export-row"><button id="exportCsv" class="button secondary" disabled>Guardar resultado CSV</button><button id="resetSession" class="text-button danger" disabled>Empezar de nuevo</button></div>
+        </section>
+
+        <p class="privacy-note">El Excel, las fotos y el conteo se procesan en tu navegador; no se envían a una base de datos.</p>
+      </main>
+      <div id="toast" class="toast" role="status"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
