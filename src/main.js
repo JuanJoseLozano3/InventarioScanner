@@ -16,7 +16,7 @@ const ui = {
   matchDescription: $('matchDescription'), matchWarehouse: $('matchWarehouse'), register: $('registerScan'),
   debugPanel: $('debugPanel'), debugSummary: $('debugSummary'), debugOutput: $('debugOutput'), copyDebug: $('copyDebug'),
   inventoryList: $('inventoryList'), requiredTab: $('requiredTab'), missingTab: $('missingTab'),
-  requiredBadge: $('requiredBadge'), missingBadge: $('missingBadge'), exportCsv: $('exportCsv'), reset: $('resetSession'),
+  requiredBadge: $('requiredBadge'), missingBadge: $('missingBadge'), exportExcel: $('exportExcel'), reset: $('resetSession'),
   saveState: $('saveState'), toast: $('toast')
 };
 let items = [];
@@ -125,7 +125,7 @@ function render() {
   const loaded = items.length > 0;
   ui.inventory.classList.toggle('hidden', !loaded);
   ui.cameraPanel.classList.toggle('hidden', !loaded);
-  ui.exportCsv.disabled = !loaded;
+  ui.exportExcel.disabled = !loaded;
   ui.reset.disabled = !loaded;
   if (!loaded) {
     ui.saveState.textContent = 'Sin Excel'; ui.fileName.textContent = 'Todavía no hay un archivo cargado';
@@ -334,12 +334,14 @@ ui.register.addEventListener('click', async () => {
   showToast('Unidad registrada');
 });
 
-ui.exportCsv.addEventListener('click', () => {
-  const rows = [['sabcodiitem','itedesccort','sabbodega','esperadas','escaneadas','faltantes']];
-  for (const x of visibleItems()) rows.push([x.code, x.description, x.warehouse, formatQty(x.expected), formatQty(x.scanned), formatQty(Math.max(0, x.expected-x.scanned))]);
-  const csv = '\ufeff' + rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a'); a.href = url; a.download = 'resultado_inventario.csv'; a.click(); URL.revokeObjectURL(url);
+ui.exportExcel.addEventListener('click', () => {
+  const rows = [['Código', 'Descripción', 'Bodega', 'Cantidad esperada', 'Unidades registradas', 'Unidades faltantes']];
+  for (const x of visibleItems()) rows.push([x.code, x.description, x.warehouse, x.expected, x.scanned, Math.max(0, x.expected - x.scanned)]);
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = [{ wch: 18 }, { wch: 42 }, { wch: 18 }, { wch: 20 }, { wch: 22 }, { wch: 22 }];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Resultado inventario');
+  XLSX.writeFile(workbook, 'resultado_inventario.xlsx');
 });
 ui.reset.addEventListener('click', async () => {
   if (!confirm('¿Borrar el Excel cargado y todos los escaneos guardados en este teléfono?')) return;
